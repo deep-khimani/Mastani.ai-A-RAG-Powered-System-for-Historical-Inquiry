@@ -1,45 +1,14 @@
-# --- PATCH for asyncio event loop in server threads ---
-import nest_asyncio
-nest_asyncio.apply()
-
-# --- All necessary imports ---
 import gradio as gr
 import time
 import os
-from dotenv import load_dotenv
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
-from langchain_community.vectorstores import Chroma
-from langchain.chains import RetrievalQA
 from gradio.themes.base import Base
+# --- KEY CHANGE: Import the AI function directly from your backend ---
+from backend import get_ai_response
 
 # --- CONFIGURATION ---
-load_dotenv()
-DB_PATH = "pune_vector_db"
-
 # Load the header HTML from the templates folder
 with open("templates/header.html", "r", encoding="utf-8") as file:
     header_html = file.read()
-
-# --- BACKEND LOGIC ---
-def create_qa_chain():
-    """Initializes and returns a RetrievalQA chain."""
-    llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest", temperature=0.5)
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
-    vector_store = Chroma(persist_directory=DB_PATH, embedding_function=embeddings)
-    retriever = vector_store.as_retriever(search_kwargs={"k": 5})
-    chain = RetrievalQA.from_chain_type(
-        llm=llm,
-        chain_type="stuff",
-        retriever=retriever,
-        return_source_documents=False
-    )
-    return chain
-
-def get_ai_response(question: str):
-    """Gets a response from the QA chain for a given question."""
-    qa_chain = create_qa_chain()
-    result = qa_chain.invoke({"query": question})
-    return result["result"]
 
 # --- CUSTOM THEME ---
 class MidnightDurbar(Base):
@@ -71,6 +40,7 @@ midnight_theme = MidnightDurbar()
 # --- CHAT FUNCTION (for Gradio) ---
 def chat_function(message, history):
     """Yields the AI response character by character for a streaming effect."""
+    # This now calls the imported function from backend.py
     response = get_ai_response(message)
     for i in range(len(response)):
         time.sleep(0.005)
@@ -103,9 +73,7 @@ with gr.Blocks(
 
 # --- LAUNCH THE APP ---
 if __name__ == "__main__":
-    # The following configuration is required for deploying on platforms like Render or Hugging Face Spaces
-    # server_name="0.0.0.0" makes the app accessible from outside its container.
-    # server_port reads the port from the environment variable provided by the hosting service.
+    # This configuration is correct for deployment on Render.
     demo.launch(
         server_name="0.0.0.0",
         server_port=int(os.getenv('PORT', 7860))
