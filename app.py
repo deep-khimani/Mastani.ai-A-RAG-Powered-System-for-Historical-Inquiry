@@ -1,6 +1,3 @@
-import nest_asyncio
-nest_asyncio.apply()
-
 import gradio as gr
 import time
 import os
@@ -10,13 +7,17 @@ from langchain_community.vectorstores import Chroma
 from langchain.chains import RetrievalQA
 from gradio.themes.base import Base
 
+# --- CONFIGURATION ---
 load_dotenv()
 DB_PATH = "pune_vector_db"
 
+# Load the header HTML from the templates folder
 with open("templates/header.html", "r", encoding="utf-8") as file:
     header_html = file.read()
 
+# --- BACKEND LOGIC ---
 def create_qa_chain():
+    """Initializes and returns a RetrievalQA chain."""
     llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest", temperature=0.5)
     embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
     vector_store = Chroma(persist_directory=DB_PATH, embedding_function=embeddings)
@@ -30,10 +31,12 @@ def create_qa_chain():
     return chain
 
 def get_ai_response(question: str):
+    """Gets a response from the QA chain for a given question."""
     qa_chain = create_qa_chain()
     result = qa_chain.invoke({"query": question})
     return result["result"]
 
+# --- CUSTOM THEME ---
 class MidnightDurbar(Base):
     def __init__(self):
         super().__init__(
@@ -60,12 +63,15 @@ class MidnightDurbar(Base):
 
 midnight_theme = MidnightDurbar()
 
+# --- CHAT FUNCTION (for Gradio) ---
 def chat_function(message, history):
+    """Yields the AI response character by character for a streaming effect."""
     response = get_ai_response(message)
     for i in range(len(response)):
         time.sleep(0.005)
         yield response[: i + 1]
 
+# --- GRADIO INTERFACE DEFINITION ---
 with gr.Blocks(
     title="Mastani.ai",
     theme=midnight_theme,
@@ -90,5 +96,12 @@ with gr.Blocks(
         cache_examples=False
     )
 
+# --- LAUNCH THE APP ---
 if __name__ == "__main__":
-    demo.launch(share=True)
+    # The following configuration is required for deploying on platforms like Render or Hugging Face Spaces
+    # server_name="0.0.0.0" makes the app accessible from outside its container.
+    # server_port reads the port from the environment variable provided by the hosting service.
+    demo.launch(
+        server_name="0.0.0.0",
+        server_port=int(os.getenv('PORT', 7860))
+    )
