@@ -1,3 +1,8 @@
+# --- PATCH for asyncio event loop in server threads ---
+import nest_asyncio
+nest_asyncio.apply()
+
+# --- All necessary imports ---
 import gradio as gr
 import time
 import os
