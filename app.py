@@ -1,14 +1,57 @@
+# --- PATCH for asyncio event loop in server threads ---
+import nest_asyncio
+
+# --- All necessary imports ---
 import gradio as gr
 import time
 import os
+from dotenv import load_dotenv
+from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
+from langchain_community.vectorstores import Chroma
+from langchain.chains import RetrievalQA
 from gradio.themes.base import Base
-# --- KEY CHANGE: Import the AI function directly from your backend ---
-from backend import get_ai_response
 
 # --- CONFIGURATION ---
+load_dotenv()
+DB_PATH = "pune_vector_db"
+
 # Load the header HTML from the templates folder
-with open("templates/header.html", "r", encoding="utf-8") as file:
-    header_html = file.read()
+try:
+    with open("templates/header.html", "r", encoding="utf-8") as file:
+        header_html = file.read()
+except FileNotFoundError:
+    print("Warning: header.html not found. Using a default title.")
+    header_html = "<h1 style='text-align: center;'>Mastani.ai</h1>"
+
+
+# --- BACKEND LOGIC (Merged from backend.py) ---
+def create_qa_chain():
+    """Initializes and returns a RetrievalQA chain."""
+    print("--- Initializing Google AI models and vector store... ---")
+    llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest", temperature=0.5)
+    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+    vector_store = Chroma(persist_directory=DB_PATH, embedding_function=embeddings)
+    retriever = vector_store.as_retriever(search_kwargs={"k": 5})
+    chain = RetrievalQA.from_chain_type(
+        llm=llm,
+        chain_type="stuff",
+        retriever=retriever,
+        return_source_documents=False
+    )
+    print("--- QA Chain created successfully. ---")
+    return chain
+
+# --- Create a single, reusable QA chain instance when the app starts ---
+# This is for performance and stability. The patch is applied here.
+nest_asyncio.apply()
+qa_chain = create_qa_chain()
+
+
+def get_ai_response(question: str):
+    """Gets a response from the reusable QA chain."""
+    # This now uses the pre-loaded chain, making it much faster.
+    result = qa_chain.invoke({"query": question})
+    return result["result"]
 
 # --- CUSTOM THEME ---
 class MidnightDurbar(Base):
@@ -39,8 +82,7 @@ midnight_theme = MidnightDurbar()
 
 # --- CHAT FUNCTION (for Gradio) ---
 def chat_function(message, history):
-    """Yields the AI response character by character for a streaming effect."""
-    # This now calls the imported function from backend.py
+    """Yields the AI response for a streaming effect."""
     response = get_ai_response(message)
     for i in range(len(response)):
         time.sleep(0.005)
