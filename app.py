@@ -194,7 +194,8 @@ with gr.Blocks(
         chatbot=gr.Chatbot(
             height=600,
             show_label=False,
-            avatar_images=get_avatar_images()
+            avatar_images=get_avatar_images(),
+            type="messages"
         ),
         examples=[
             "Who made Pune the capital during the 18th century?",
