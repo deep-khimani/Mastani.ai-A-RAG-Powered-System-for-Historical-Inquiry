@@ -1,7 +1,6 @@
-# --- PATCH for asyncio event loop in server threads ---
 import nest_asyncio
+nest_asyncio.apply()
 
-# --- All necessary imports ---
 import gradio as gr
 import time
 import os
@@ -11,23 +10,13 @@ from langchain_community.vectorstores import Chroma
 from langchain.chains import RetrievalQA
 from gradio.themes.base import Base
 
-# --- CONFIGURATION ---
 load_dotenv()
 DB_PATH = "pune_vector_db"
 
-# Load the header HTML from the templates folder
-try:
-    with open("templates/header.html", "r", encoding="utf-8") as file:
-        header_html = file.read()
-except FileNotFoundError:
-    print("Warning: header.html not found. Using a default title.")
-    header_html = "<h1 style='text-align: center;'>Mastani.ai</h1>"
+with open("templates/header.html", "r", encoding="utf-8") as file:
+    header_html = file.read()
 
-
-# --- BACKEND LOGIC (Merged from backend.py) ---
 def create_qa_chain():
-    """Initializes and returns a RetrievalQA chain."""
-    print("--- Initializing Google AI models and vector store... ---")
     llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest", temperature=0.5)
     embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
     vector_store = Chroma(persist_directory=DB_PATH, embedding_function=embeddings)
@@ -38,22 +27,13 @@ def create_qa_chain():
         retriever=retriever,
         return_source_documents=False
     )
-    print("--- QA Chain created successfully. ---")
     return chain
 
-# --- Create a single, reusable QA chain instance when the app starts ---
-# This is for performance and stability. The patch is applied here.
-nest_asyncio.apply()
-qa_chain = create_qa_chain()
-
-
 def get_ai_response(question: str):
-    """Gets a response from the reusable QA chain."""
-    # This now uses the pre-loaded chain, making it much faster.
+    qa_chain = create_qa_chain()
     result = qa_chain.invoke({"query": question})
     return result["result"]
 
-# --- CUSTOM THEME ---
 class MidnightDurbar(Base):
     def __init__(self):
         super().__init__(
@@ -80,15 +60,12 @@ class MidnightDurbar(Base):
 
 midnight_theme = MidnightDurbar()
 
-# --- CHAT FUNCTION (for Gradio) ---
 def chat_function(message, history):
-    """Yields the AI response for a streaming effect."""
     response = get_ai_response(message)
     for i in range(len(response)):
         time.sleep(0.005)
         yield response[: i + 1]
 
-# --- GRADIO INTERFACE DEFINITION ---
 with gr.Blocks(
     title="Mastani.ai",
     theme=midnight_theme,
@@ -113,10 +90,5 @@ with gr.Blocks(
         cache_examples=False
     )
 
-# --- LAUNCH THE APP ---
 if __name__ == "__main__":
-    # This configuration is correct for deployment on Render.
-    demo.launch(
-        server_name="0.0.0.0",
-        server_port=int(os.getenv('PORT', 7860))
-    )
+    demo.launch(share=True)
