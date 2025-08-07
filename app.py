@@ -1,9 +1,7 @@
-import nest_asyncio
-nest_asyncio.apply()
-
 import gradio as gr
 import time
 import os
+import asyncio
 from dotenv import load_dotenv
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_community.vectorstores import Chroma
