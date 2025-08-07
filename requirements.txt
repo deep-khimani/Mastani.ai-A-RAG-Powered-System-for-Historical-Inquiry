@@ -6,8 +6,9 @@ langchain-google-genai
 langchain-community
 chromadb
 google-generativeai
-faiss-cpu
 sentence-transformers
 tiktoken
 numpy
 pandas
+pypdf
+unstructured
