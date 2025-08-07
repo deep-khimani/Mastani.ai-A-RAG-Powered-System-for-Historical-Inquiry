@@ -1,7 +1,7 @@
 import gradio as gr
 import time
 import os
-import asyncio
+import sys
 from dotenv import load_dotenv
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_community.vectorstores import Chroma
@@ -10,7 +10,6 @@ from langchain_community.document_loaders import TextLoader, PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from gradio.themes.base import Base
 import logging
-import threading
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -18,9 +17,9 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 PORT = int(os.environ.get("PORT", 7860))
-HOST = os.environ.get("HOST", "0.0.0.0")
 DB_PATH = "pune_vector_db"
 qa_chain = None
+is_initializing = True
 
 def load_header_html():
     try:
@@ -55,8 +54,6 @@ def load_documents():
         return []
 
 def create_vector_database():
-    global qa_chain
-    
     try:
         if os.path.exists(DB_PATH):
             embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
@@ -89,7 +86,7 @@ def create_vector_database():
         return None
 
 def create_qa_chain():
-    global qa_chain
+    global qa_chain, is_initializing
     
     if qa_chain is not None:
         return qa_chain
@@ -111,19 +108,25 @@ def create_qa_chain():
             retriever=retriever,
             return_source_documents=False
         )
+        is_initializing = False
         return qa_chain
         
     except Exception as e:
         logger.error(f"Error creating QA chain: {e}")
+        is_initializing = False
         return None
 
 def get_ai_response(question: str):
+    global is_initializing
+    
     try:
-        chain = create_qa_chain()
-        if chain is None:
-            return "Historical database is currently being set up. Please try again in a moment."
+        if is_initializing:
+            create_qa_chain()
         
-        result = chain.invoke({"query": question})
+        if qa_chain is None:
+            return "Historical database is currently unavailable. Please check if your data files are present and try again."
+        
+        result = qa_chain.invoke({"query": question})
         return result["result"]
     except Exception as e:
         logger.error(f"Error getting AI response: {e}")
@@ -163,7 +166,7 @@ def chat_function(message, history):
     try:
         response = get_ai_response(message)
         for i in range(len(response)):
-            time.sleep(0.005)
+            time.sleep(0.003)
             yield response[: i + 1]
     except Exception as e:
         logger.error(f"Error in chat function: {e}")
@@ -174,52 +177,37 @@ def get_avatar_images():
     bot_img = "images/bot.png" if os.path.exists("images/bot.png") else None
     return (user_img, bot_img)
 
-def create_app():
-    with gr.Blocks(
-        title="Mastani.ai",
-        theme=midnight_theme,
-        analytics_enabled=False,
-        js="() => { window.scrollTo(0, 0); }"
-    ) as demo:
-        gr.HTML(header_html)
-        
-        with gr.Row():
-            gr.HTML("<p style='text-align: center; color: #a0a0a0;'>🔄 Initializing historical database... First query may take a moment.</p>")
-        
-        gr.ChatInterface(
-            fn=chat_function,
-            type="messages",
-            chatbot=gr.Chatbot(
-                height=600,
-                show_label=False,
-                avatar_images=get_avatar_images()
-            ),
-            examples=[
-                "Who made Pune the capital during the 18th century?",
-                "Which two rivers meet at the 'Sangam' in Pune?",
-                "What is the name of Pune's oldest area where the city originally began?"
-            ],
-            cache_examples=False
-        )
+with gr.Blocks(
+    title="Mastani.ai",
+    theme=midnight_theme,
+    analytics_enabled=False,
+    js="() => { window.scrollTo(0, 0); }"
+) as demo:
+    gr.HTML(header_html)
     
-    return demo
-
-def initialize_app():
-    def create_db_async():
-        create_qa_chain()
+    with gr.Row():
+        gr.HTML("<p style='text-align: center; color: #a0a0a0;'>📚 Ask me anything about Pune's rich history!</p>")
     
-    db_thread = threading.Thread(target=create_db_async)
-    db_thread.daemon = True
-    db_thread.start()
-
-demo = create_app()
+    gr.ChatInterface(
+        fn=chat_function,
+        type="messages",
+        chatbot=gr.Chatbot(
+            height=600,
+            show_label=False,
+            avatar_images=get_avatar_images()
+        ),
+        examples=[
+            "Who made Pune the capital during the 18th century?",
+            "Which two rivers meet at the 'Sangam' in Pune?",
+            "What is the name of Pune's oldest area where the city originally began?"
+        ],
+        cache_examples=False
+    )
 
 if __name__ == "__main__":
-    initialize_app()
     demo.launch(
-        server_name=HOST,
+        server_name="0.0.0.0",
         server_port=PORT,
         share=False,
-        show_error=True,
-        quiet=False
+        show_error=True
     )
