@@ -45,7 +45,7 @@ Follow these steps to get Mastani.ai up and running on your local machine.
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/deep-khimani/mastani-ai.git
+    git clone https://github.com/deep-khimani/Mastani.ai-A-RAG-Powered-System-for-Historical-Inquiry.git
     cd mastani-ai
     ```
 2.  **Install dependencies:**
